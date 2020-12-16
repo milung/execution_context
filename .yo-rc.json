@@ -1,0 +1,10 @@
+{
+  "generator-swipl": {
+    "promptValues": {
+      "registry": "milung"
+    },
+    "applicationName": "execution context",
+    "commandName": "execution context",
+    "registry": "milung"
+  }
+}

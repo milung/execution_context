@@ -33,27 +33,31 @@
 
 %! context_variable(+Name:atom, +Type, +Options:list) is det.
 %  Declares new contextual variable with the module specific name. Repeated declarations
-%  for the same Name %  are possible, the last call is taken into account but not after the
+%  for the same `Name` are possible, the last call is taken into account but not after the
 %  value was queried (which would be served from the cache.
 % 
-%  Type can be one of the _atom_, _bool_, _number_, _string_, _list_, _list(atom)_, _list(number).
+%  Type can be one of the _atom_, _bool_, _number_, _string_, _list_, _list(atom)_, _list(number)_.
 %  in case of list types, the list can be specified as a list of atoms or numbers separate by comma (,)
-%  or semicolon, and optionally enclosed into parenthesis or brackets (e.g. '[ a, b,c, e]'', 
-%  or '(1;2; 3 ; 4)', or 'o, p ; q, r ') will work. Elements in the list are trimmed for left and right. 
+%  or semicolon, and optionally enclosed into parenthesis or brackets (e.g. `[ a, b,c, e]`, 
+%  or `(1;2; 3 ; 4)`, or `o, p ; q, r `) will work. Elements in the list are trimmed of left and right spaces. 
 %  
 %  Options can be one of: 
-%  *  long(Long) - specifies the long name of the command line parameter prefixed with two dashes. If not provided then the 
-%        Long name is assumed to be based on the name with characters ' ', '_', ':' replaced by the dash. Value of the 
-%        variable can be either concatenated into argument with '=' character, or separated by space. For example if the long(some_option)
-%        is given then the argument '--some-option=value', or '--some-option value' will both assign 'value' to context variable of the Name. 
-%  * short(Short) - specifies short variant of the command line argument prefixed by '-'. Value must be provided after the space. For 
-%        example if the option short(s) is given then the argument '-s value' will assign 'value' to context variable of the Name
-%  * is_flag(Bool) - if Bool is true, then the system recognize the options with out value and --no-long options, where long correspnds to the 
-%        long(Atom) option value.
-%  * env(EnvName) - specifies the name of the environment variable to check for the value of the context variable. If not provided then the 
+%  * `long(Long)` - specifies the long name of the command line parameter prefixed with two dashes. If not provided then the 
+%        `Long` name is assumed to be based on the name with characters ' ', '_', ':' replaced by the dash. Value of the 
+%        variable can be either concatenated into argument with '=' character, or separated by space. For example if the `long(some_option)`
+%        is given then the argument `--some-option=value`, or `--some-option value` will both assign `value` to context variable of the `Name`. 
+%  * `short(Short)` - specifies short variant of the command line argument prefixed by '-'. Value must be provided after the space. For 
+%        example if the option short(s) is given then the argument `-s value` will assign 'value' to context variable of the Name
+%  * `is_flag(Bool)` - if Bool is true, then the system recognize the options with out value and `--no-long` options, where `long` correspnds to the 
+%        `long(Atom)` option value. Variables of type `bool` are implicitly considered to be flags
+%  * `env(EnvName)` - specifies the name of the environment variable to check for the value of the context variable. If not provided then the 
 %        EnvName name is assumed to be based on the name with characters ' ', '_', ':' replaced by the undescore.
-%  * default(Value) - Specifies the default values if no other means provides a value. If the Value is of the form context(Variable), then 
-%        context variable Variable is evaluated for the default value. Infinite dependency cycles are not resolved, so be carefull here.
+%  * `default(Value)` - Specifies the default values if no other means provides a value. If the `Value` is of the form `context(Variable)`, then 
+%        context variable `Variable` is evaluated for the default value. Infinite dependency cycles are not resolved, so be carefull here.
+context_variable(Name, bool, Options) :-
+    retractall(context_variable_def(Name,_,_)),
+    assert(context_variable_def(Name, bool, [is_flag(true)|Options])),
+    !.
 context_variable(Name, Type, Options) :-
     retractall(context_variable_def(Name,_,_)),
     assert(context_variable_def(Name, Type, Options)).
@@ -71,9 +75,9 @@ context_variable(Name, Type, Options) :-
 %  * Check if the Variable name or environment variable name is assigned in the config.env file
 %  * Check if the default value is provided.
 %
-%  The config.env, config.dev.env, and config.env files are looked up in  the file search paths defined as
-%  params(config.dev). The params path resolves to current working directory or into the 'config' directory of the current working 
-%  directory. The name variants are provided by the options of the predicate context_variable/2 or derived from the context variable 
+%  The `config.env`, `config.dev.env`, and `config.env` files are looked up in  the file search paths defined as
+%  `params(config.dev)`. The params path resolves to current working directory or into the `config` directory of the current working 
+%  directory. The name variants are provided by the options of the predicate `context_variable/2` or derived from the context variable 
 %  name. 
 context_variable_value(Variable, Value) :-
     context_variable_def(Variable, Type, Options),
@@ -81,8 +85,8 @@ context_variable_value(Variable, Value) :-
     once(adapt_type(ValueAtom, Type, Value)).
 
 %! option_or_context_variable(Option, Options) is semidet
-%  As option/2, but if that fails then it behaves as context_variable(OptionFunctor, OptionArg). 
-%  Options are checked for the module specific or local name of the option. 
+%  As `option/2`, but if that fails then it behaves as `context_variable(OptionFunctor, OptionArg)`. 
+%  `Options` are checked for the module specific or local name of the option. 
 option_or_context_variable(Option, Options):-
     option(Option, Options), 
     !.
@@ -201,20 +205,26 @@ default_name(Module:Variable, Separator, DefaultName) :-
     atom_codes(DefaultName, Codes1).
 
 find_argv([Arg| _], Long, _, true, false) :-
-    atomic_list_concat(['--no-', Long], Arg).
+    atom_concat('--no-', Long, Arg).
  find_argv([Arg| _], Long, _, true, true) :-
-    atomic_list_concat(['--', Long], Arg).
+    atom_concat('--', Long, Arg).
  find_argv([Arg| _], _, Short, true, true) :-
     Short \= [],
-    atomic_list_concat(['-', Short], Arg).
+    atom_codes( Arg, ArgCodes),
+    ArgCodes \= [ 0'-, 0'- | _ ],
+    ArgCodes = [ 0'- | _ ],    
+    atom_codes(Short, [Code|_]),
+    memberchk(Code, ArgCodes).   
  find_argv([Arg| _], Long, _, _, Value) :-
     atomic_list_concat(['--', Long, '='], ArgPrefix),
     atom_concat(ArgPrefix, Value, Arg).
  find_argv([Arg, Value| _], Long, _, false, Value) :-
-    atomic_list_concat(['--', Long], Arg).
+    atom_concat('--', Long, Arg).
  find_argv([Arg, Value| _], _, Short, false, Value) :-
     Short \= [],
-    atomic_list_concat(['-', Short], Arg).
+    atom_concat('-', Shorts, Arg),
+    \+ atom_concat('-', _, Shorts),
+    atom_concat(_, Short, Shorts).
  find_argv([_| Args], Long, Short, IsFlag, Value) :-
     find_argv(Args, Long, Short, IsFlag, Value).
 
@@ -260,7 +270,7 @@ resolve_default(Module:_, Value, Options) :-
 
 resolve_command_line(Variable, Value, Options):-
     current_prolog_flag(os_argv, Argv),
-    option(is_flag(IsFlag), Options, false),
+    option(is_flag(IsFlag), Options, false),    
     option(short(Short), Options, []),
     default_name(Variable, '-', DefaultLong),
     option(long(Long), Options, DefaultLong),

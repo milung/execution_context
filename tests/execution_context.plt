@@ -15,6 +15,10 @@
 :- execution_context:context_variable(short_value, atom, [short('S'), long(short)]).
 :- execution_context:context_variable(long_value, atom, [short(l), long(long) ]).
 :- execution_context:context_variable(long_assigned, atom, [short(a), long('variable-long-a') ]).
+:- execution_context:context_variable(short_mix_x, bool, [short(x) ]).
+:- execution_context:context_variable(short_mix_y, bool, [short(y) ]).
+:- execution_context:context_variable(short_mix_z, bool, [short(z) ]).
+:- execution_context:context_variable(short_mix_o, atom, [short(o) ]).
 :- execution_context:context_variable(module:default, atom, []).
 
 test(cli, 
@@ -28,7 +32,11 @@ test(cli,
                 assigned_flag=false,
                 short_value=short,                
                 long_assigned='long A',
-                module:default=module
+                module:default=module,
+                short_mix_x=true,
+                short_mix_y=true,
+                short_mix_z=true,
+                short_mix_o=mixed
             ]))
     ]) :-
     execution_context:context_variable_value(Var, Value).

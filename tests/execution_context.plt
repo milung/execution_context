@@ -14,7 +14,14 @@
 :- execution_context:context_variable(assigned_flag, atom, [long('flag-ex'), is_flag(true)]).
 :- execution_context:context_variable(short_value, atom, [short('S'), long(short)]).
 :- execution_context:context_variable(long_value, atom, [short(l), long(long) ]).
-:- execution_context:context_variable(long_assigned, atom, [short(a), long('variable-long-a') ]).
+:- execution_context:context_variable(long_assigned, atom, 
+    [
+        short(a), 
+        long('variable-long-a'), 
+        env('LONG_ASSIGNED'), 
+        cli_command([]),
+        describe('Lorem ipsum dorem sulpur natrum getrdum faber norda dru xaver sepsum rad dru fertum waklo dom futrum madza lentra')
+    ]).
 :- execution_context:context_variable(short_mix_x, bool, [short(x) ]).
 :- execution_context:context_variable(short_mix_y, bool, [short(y) ]).
 :- execution_context:context_variable(short_mix_z, bool, [short(z) ]).

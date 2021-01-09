@@ -42,6 +42,8 @@
 %  or `(1;2; 3 ; 4)`, or `o, p ; q, r `) will work. Elements in the list are trimmed of left and right spaces. 
 %  
 %  Options can be one of: 
+%  * `describe(Message)` - provides human readable information about the command that is printed when
+%    the CLI help is invoked (for cli options). 
 %  * `long(Long)` - specifies the long name of the command line parameter prefixed with two dashes. If not provided then the 
 %        `Long` name is assumed to be based on the name with characters ' ', '_', ':' replaced by the dash. Value of the 
 %        variable can be either concatenated into argument with '=' character, or separated by space. For example if the `long(some_option)`
@@ -54,6 +56,9 @@
 %        EnvName name is assumed to be based on the name with characters ' ', '_', ':' replaced by the undescore.
 %  * `default(Value)` - Specifies the default values if no other means provides a value. If the `Value` is of the form `context(Variable)`, then 
 %        context variable `Variable` is evaluated for the default value. Infinite dependency cycles are not resolved, so be carefull here.
+%  * `cli_command(Commands)` - `Commands` is list of CLI commands (see `execute_cli/1`), for which the variable is intended. This information
+%    is only used to describe usage of the command. Either option `short` or `long˙, and option `describe˙ must be provided to provide any
+%    help information about the variable. The option `cli_command([])` is interpreted as the option for all CLI commands. 
 context_variable(Name, bool, Options) :-
     retractall(context_variable_def(Name,_,_)),
     assert(context_variable_def(Name, bool, [is_flag(true)|Options])),

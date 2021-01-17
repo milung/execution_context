@@ -34,13 +34,17 @@ execute_cli :-
 %  (see `register_cli_command/3`), or when the option that cannot be associated with any context variable 
 %  is found on command line arguments. The exception can be used for print_message call. 
 execute_cli(Arguments) :-  
-  phrase(positional_args([ Command | Positional]), Arguments),  
+  (   phrase(positional_args([ Command | Positional]), Arguments)
+  ->  true
+  ;   Command = help
+  ),
   (   Command == help 
   ->  portray_command_help(help, [])
   ;   command_spec(Command, Goal, ArgumentSpec),
       (   Positional = [ help | _ ]
       ->  portray_command_help(Command, ArgumentSpec)
       ;   verify_arguments(ArgumentSpec, Positional, Options),
+          retractall(execution_context:variable_cache),
           call(Goal, Positional, Options)
       )
   ), !.
@@ -57,12 +61,12 @@ execute_cli(Arguments) :-
 %    succeeds, then `Goal` second argument will contain option named `OptionName` with the value `Value`. 
 %    If the context_variable is not resolved then the exception is raised and user informed that the required
 %    option is missing
-%  * `optional(context(ContextVariable, OptionName))` - similar to above, but the context variable is not
+%  * `optional(context(ContextVariable, OptionName))` - similar to above, but the c ontext variable is not
 %    required to be resolved
-%  * `positional(Nth1, OptionName)` - associates `Nth1` element of positional arguments with option `OptionName`
+%  * `positional(Nth1, OptionName, Describe)` - associates `Nth1` element of positional arguments with option `OptionName`
 %    when calling `Goal`. If there are not enough positional argumentsthen the exception is raised and user is 
 %    informed that argument is missing 
-%  * `optional(positional(Nth1, OptionName))` - similar to above, but the positional argument is not
+%  * `optional(positional(Nth1, OptionName, Describe))` - similar to above, but the positional argument is not
 %    required to be resolved
 register_cli_command(Command, Goal, ArgumentsSpec) :-
   retractall(command_spec(Command, _,  _)),
@@ -94,6 +98,16 @@ is_variable(long(OptionName), Type) :-
   ;   OptionName == DefaultName
   ).
 
+portray_arguments([]) --> [], !.
+  portray_arguments([Name-Description|Args]) -->
+    {   split_long_description(Description, 60, [Line|Lines]),
+        format(atom(OutLine), '  ~w~20|~w', [Name, Line]),
+        maplist([Descr, Out] >>format(atom(Out), '~20|~w', [Descr]), Lines, OutLines)
+    },
+    [OutLine| OutLines ],
+    !,
+    portray_arguments(Args).
+ 
 portray_command_help(Command, Spec) :-
   phrase(portray_command_help(Command, Spec), Lines),
   atomic_list_concat(Lines, '\n', Message),
@@ -108,20 +122,18 @@ portray_command_help(help, _) -->
   },
   [Line0, 'Where <command> is one of:'],
   portray_command_infos(Commands),
-  [ '', 'Options common for all commands:'],
-  portray_command_options([]),
+  portray_command_options([], [ '', 'Options common for all commands:']),
   !.
  portray_command_help(Command, Spec) --> 
   {   current_prolog_flag(os_argv, [Exe | _]),
-      directory_file_path(_, File, Exe),  
-      format(atom(Line0), 'Usage: ~w ~w [common options] [options]', [File, Command])   
-  },  
-  [Line0],
+      directory_file_path(_, File, Exe)       
+  },    
+  portray_command_usage(File, Command, Spec),
   portray_command_info(Command, Spec),
-  ['', 'Options:' ],
-  portray_command_options(Command),
-  [ '', 'Options common for all commands:'],
-  portray_command_options([]),
+  portray_positional_arguments(Spec),
+  portray_command_options(Command,['', 'Options:' ]),
+  portray_command_options([],[ '', 'Options common for all commands:']),
+  ['', 'Use "<command> help" for additional details' ],
   !.
 
 portray_command_info(Command, Spec) -->
@@ -140,7 +152,7 @@ portray_command_infos([]) --> [].
     portray_command_infos(Commands).
   
 
-portray_command_options(Command) -->
+portray_command_options(Command, Header) -->
   {   findall(
           Long-Short-Spec-Type, 
           (   execution_context:context_variable_def(_, Type, Spec),
@@ -161,40 +173,84 @@ portray_command_options(Command) -->
               \+ (Short == '', Long == '')
           ),
           Specs),
-      sort(Specs, Sorted)
+      sort(Specs, Sorted),
+      \+ length(Sorted,0)
   },
+  Header,
   portray_options(Sorted).
+portray_command_options(_, _) --> [].
+
+portray_command_usage(File, Command, Spec) -->
+  {
+    findall(Index-Name, member(positional(Index, Name, _), Spec), Positionals),    
+    findall(Index-Name, member(optional(positional(Index, Name, _)), Spec), Optionals0),
+    (   length(Optionals0, 0)
+    ->  Arguments0 = Positionals
+    ;   maplist([Index-Name, Index-OptName] >> atomic_list_concat(['[', Name, ']'], OptName), Optionals ),
+        append(Positionals, Optionals, Arguments0)
+    ),
+    sort(Arguments0, Arguments1),
+    pairs_values(Arguments1, Arguments2),
+    atomic_list_concat(Arguments2, ' ', Arguments),        
+    format(atom(Usage), 'Usage: ~w ~w <Common options...> <Options...> ~w', [File, Command, Arguments])
+  },
+  [Usage].
 
 portray_option(Long, Short, Type, Spec) -->
-  {   memberchk(describe(Description0), Spec),      
+  {   memberchk(describe(Description0), Spec),   
+      (   memberchk(default(Default), Spec)
+      ->  format(atom(DefaultText), 'Defaults to `~w`. ', [ Default])
+      ;   DefaultText = ''
+      ),   
       (   portray_type_text(Type, Text)
-      ->  atomic_list_concat(['(', Text, ') ', Description0], Description1)
-      ;   Description1 =  Description0
-      ),
-      (   memberchk(env(Env), Spec)
-      ->  atomic_list_concat([Description1, ' Can be set by environment variable ', Env], Description)      
-      ;   Description = Description1
+      ->  atomic_list_concat(['(', Text, ') '], TypeText)
+      ;   TypeText = ''
       ),      
+      (   memberchk(env(Env), Spec)
+      ->  atomic_list_concat(['. Can be set by environment variable ', Env, '. '], EnvText)      
+      ;   EnvText = ''
+      ),      
+      format(atom(Description), '~w~w~w~w', [TypeText, DefaultText, Description0, EnvText]),
       split_long_description(Description, 56, [Line|Lines]),      
       format(atom(OutLine), '  ~w ~20|~w ~24|~w', [Long, Short, Line ] ),
       maplist([Descr, Out] >>format(atom(Out), '~24|~w', [Descr]), Lines, OutLines)
   },
   [OutLine| OutLines],
   !.
- portray_option(_, _) --> [].
+ portray_option(_, _, _, _) --> [].
 
 portray_options([]) --> [], !.
  portray_options([Long-Short-Spec-Type|Specs]) -->
     portray_option(Long, Short, Type, Spec), 
     portray_options(Specs).
 
+portray_positional_arguments(Spec) -->
+  {
+    findall(Name-Description, member(positional(_, Name, Description), Spec), Positionals0),
+    sort(Positionals0, Positionals),
+    (   length(Positionals, 0)
+    ->  PositionalsHeader = []
+    ;    PositionalsHeader = ['', 'Mandatory arguments:']
+    ),
+    findall(Name-Description, member(optional(positional(_, Name, Description)), Spec), Optionals0),
+    sort(Optionals0, Optionals),
+    (   length(Optionals, 0)
+    ->  OptionalsHeader = []
+    ;    OptionalsHeader = ['', 'Optional arguments:']
+    ) 
+  },
+  PositionalsHeader,
+  portray_arguments(Positionals),
+  OptionalsHeader,
+  portray_arguments(Optionals).
+
 portray_type_text(bool, flag).
-portray_type_text(number, number).
-portray_type_text(atom, value).
-portray_type_text(list, 'comma separated list of values').
-portray_type_text(list(number), 'comma separated list of numbers').
-portray_type_text(list(_), 'comma separated list of values').
-portray_type_text(Type, Type).
+ portray_type_text(number, number).
+ portray_type_text(atom, value).
+ portray_type_text(list, 'comma separated list of values').
+ portray_type_text(list(number), 'comma separated list of numbers').
+ portray_type_text(list(_), 'comma separated list of values').
+ portray_type_text(Type, Type).
 
 
 
@@ -270,6 +326,8 @@ prolog:message(cli_option(unknown, Option)) -->
     [ 'Unknown command line option ~w' - [Option] ].
  prolog:message(cli_option(unknown, Option)) -->
     [ 'Missing required command line option \'~w\' ' - [Option] ].
+ prolog:message(cli_option(positional, Option)) -->
+    [ 'Required argument \'~w\' is missing ' - [Option] ].
 
 split_long_description(Long, Length, Lines) :-
   atom_codes(Long, Codes),
@@ -336,6 +394,6 @@ verify_arguments([], _, []).
       Option =.. [OptionName, Value],
       !,
       verify_arguments( Spec, Positional, Options ).
- verify_arguments([context(ContextVariable, _) | _], _, _ ) :-    
+ verify_arguments([positional(_, OptionName) | _], _, _ ) :-    
     throw(cli_option(positional, OptionName)).
     

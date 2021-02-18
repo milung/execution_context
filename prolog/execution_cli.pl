@@ -40,7 +40,11 @@ execute_cli(Arguments) :-
   ),
   (   Command == help 
   ->  portray_command_help(help, [])
-  ;   command_spec(Command, Goal, ArgumentSpec),
+  ;   ( command_spec(Command, Goal, ArgumentSpec)
+      ->  true
+      ;   print_message(error, format('Unknown command `~w`', [Command])),
+          halt(42)
+      ),
       (   Positional = [ help | _ ]
       ->  portray_command_help(Command, ArgumentSpec)
       ;   verify_arguments(ArgumentSpec, Positional, Options),
@@ -115,8 +119,7 @@ portray_command_help(Command, Spec) :-
   !.
 
 portray_command_help(help, _) -->
-  {   current_prolog_flag(os_argv, [Exe | _]),
-      directory_file_path(_, File, Exe),  
+  {   program_name(File),  
       format(atom(Line0), 'Usage: ~w <command> [common options] [command options]', [File]), 
       findall(Command-Spec, command_spec(Command, _, Spec), Commands)
   },
@@ -125,8 +128,7 @@ portray_command_help(help, _) -->
   portray_command_options([], [ '', 'Options common for all commands:']),
   !.
  portray_command_help(Command, Spec) --> 
-  {   current_prolog_flag(os_argv, [Exe | _]),
-      directory_file_path(_, File, Exe)       
+  {   program_name(File)   
   },    
   portray_command_usage(File, Command, Spec),
   portray_command_info(Command, Spec),
@@ -321,6 +323,12 @@ positional_mixed_flags, Flags -->
        maplist([C, F] >> atom_codes(F, [0'-, C]), Codes, Flags)
     },
     !.
+program_name(Name) :-
+  current_prolog_flag(os_argv, [Exe | _]),
+  atomic_list_concat(Segments, '\\', Exe),
+  atomic_list_concat(Segments, '/', Path),
+  directory_file_path(_, File, Path),
+  file_name_extension(Name, _, File).
 
 prolog:message(cli_option(unknown, Option)) -->
     [ 'Unknown command line option ~w' - [Option] ].
@@ -389,11 +397,11 @@ verify_arguments([], _, []).
     ;   execution_context:default_name(ContextVariable, '-', OptionName )
     ),
     throw(cli_option(required, OptionName)).
- verify_arguments([positional(Index, OptionName)| Spec], Positional, [Option|Options] ) :-
+ verify_arguments([positional(Index, OptionName, _)| Spec], Positional, [Option|Options] ) :-
       nth1(Index, Positional, Value),
       Option =.. [OptionName, Value],
       !,
       verify_arguments( Spec, Positional, Options ).
- verify_arguments([positional(_, OptionName) | _], _, _ ) :-    
+ verify_arguments([positional(_, OptionName, _) | _], _, _ ) :-    
     throw(cli_option(positional, OptionName)).
     

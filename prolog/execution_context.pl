@@ -26,8 +26,12 @@
 :- multifile 
     context_variable/3.
 
-:- asserta(user:file_search_path(params, '.')).
-:- asserta(user:file_search_path(params, './config')).
+user:file_search_path(config, '.').
+user:file_search_path(config, './config').
+
+:- create_prolog_flag(environment, production, [type(atom)]).
+:- initialization(set_prolog_flag(environment, production), prepare_state).
+:- set_prolog_flag(environment, development).
 
 %%% PUBLIC PREDICATES %%%%%%%%%%%%%%%%%%%%%%%%%%%
 
@@ -80,8 +84,8 @@ context_variable(Name, Type, Options) :-
 %  * Check if the Variable name or environment variable name is assigned in the config.env file
 %  * Check if the default value is provided.
 %
-%  The `config.env`, `config.dev.env`, and `config.env` files are looked up in  the file search paths defined as
-%  `params(config.dev)`. The params path resolves to current working directory or into the `config` directory of the current working 
+%  The `config.env` files are looked up in  the file search paths defined as
+%  `config(config.env)`. This module resolves config path to the current working directory or into the `config` directory of the current working 
 %  directory. The name variants are provided by the options of the predicate `context_variable/2` or derived from the context variable 
 %  name. 
 context_variable_value(Variable, Value) :-
@@ -234,15 +238,20 @@ find_argv([Arg| _], Long, _, true, false) :-
     find_argv(Args, Long, Short, IsFlag, Value).
 
 load_configurations :-
+    retractall(variable_cache(_,_)),
     retractall(configuration(_,_)),
-    load_configuration('config.env'),
-    load_configuration('config.dev.env'),
-    load_configuration('config.user.env'),
+    load_configuration(config('config.env')),
+    (   current_prolog_flag(environment, development)
+    ->  load_configuration(project('config/config.dev.env')),
+        load_configuration(project('config/config.user.env'))
+    ;   true
+    ),
     !.
 
 load_configuration(File) :-    
-    absolute_file_name(params(File), AbsolutePath, [file_errors(fail)]),
+    absolute_file_name(File, AbsolutePath),
     exists_file(AbsolutePath),
+    print_message(informational, format('Configurations loaded from the file ~w', [AbsolutePath])),
     setup_call_cleanup(
         open(AbsolutePath, read, Stream, [encoding(utf8)]),
         phrase_from_stream(env_grammar, Stream),
@@ -337,4 +346,4 @@ value_list_open --> whites, ("[" ; "(" ; []), !.
 value_list_separator --> ",".
 value_list_separator --> ";".
 
-:- load_configurations.
+:- initialization(load_configurations).

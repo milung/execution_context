@@ -121,7 +121,8 @@ portray_command_help(Command, Spec) :-
 portray_command_help(help, _) -->
   {   program_name(File),  
       format(atom(Line0), 'Usage: ~w <command> [common options] [command options]', [File]), 
-      findall(Command-Spec, command_spec(Command, _, Spec), Commands)
+      findall(Command-Spec, command_spec(Command, _, Spec), Commands0),
+      sort(Commands0, Commands)
   },
   [Line0, 'Where <command> is one of:'],
   portray_command_infos(Commands),

@@ -71,6 +71,8 @@ context_variable(Name, Type, Options) :-
     retractall(context_variable_def(Name,_,_)),
     assert(context_variable_def(Name, Type, Options)).
 
+:- table context_variable_value/2 as shared.
+
 %! context_variable_value(+Variable, -Value) is semidet
 %  Unifies Value with the contextual variable. The Variable must be declared using
 %  context_variable/3 call.
@@ -237,7 +239,8 @@ find_argv([Arg| _], Long, _, true, false) :-
  find_argv([_| Args], Long, Short, IsFlag, Value) :-
     find_argv(Args, Long, Short, IsFlag, Value).
 
-load_configurations :-
+load_configurations :-    
+    abolish_module_tables(execution_context),
     retractall(variable_cache(_,_)),
     retractall(configuration(_,_)),
     load_configuration(config('config.env')),

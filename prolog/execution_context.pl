@@ -71,8 +71,6 @@ context_variable(Name, Type, Options) :-
     retractall(context_variable_def(Name,_,_)),
     assert(context_variable_def(Name, Type, Options)).
 
-:- table context_variable_value/2 as shared.
-
 %! context_variable_value(+Variable, -Value) is semidet
 %  Unifies Value with the contextual variable. The Variable must be declared using
 %  context_variable/3 call.
